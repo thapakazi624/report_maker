@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Report Maker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background-color: #f4f4f4;
+      margin: 20px;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+      margin: auto;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 5px;
+      color: #555;
+    }
+    input, textarea, button {
+      width: 100%;
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #ddd;
+      font-size: 16px;
+    }
+    textarea {
+      resize: vertical;
+    }
+    button {
+      background-color: #28a745;
+      color: white;
+      border: none;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    button:hover {
+      background-color: #218838;
+    }
+    #output-container {
+      display: none;
+      margin-top: 20px;
+    }
+    #output {
+      padding: 10px;
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      white-space: pre-wrap;
+      font-size: 18px;
+    }
+    #copyBtn {
+      background-color: #007bff;
+      margin-top: 10px;
+    }
+    #copyBtn:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>Report Maker</h1>
+
+    <!-- File Input -->
+    <div class="form-group">
+      <label for="fileInput">ファイルを選択:</label>
+      <input type="file" id="fileInput" accept=".xlsx, .xls">
+    </div>
+
+    <!-- Comment Input -->
+    <div class="form-group">
+      <label for="comment">コメント:</label>
+      <textarea id="comment" rows="3"></textarea>
+    </div>
+
+    <!-- Notification Time Input -->
+    <div class="form-group">
+      <label for="notificationTime">告知時間 (分):</label>
+      <input type="number" id="notificationTime" value="30">
+    </div>
+
+    <!-- Accident Date Input -->
+    <div class="form-group">
+      <label for="accidentDate">事故日:</label>
+      <input type="date" id="accidentDate" value="2024-07-02">
+    </div>
+
+    <!-- Submit Button -->
+    <button id="submitBtn">作成</button>
+
+    <!-- Output Section -->
+    <div id="output-container">
+      <h3>Report Output:</h3>
+      <div id="output"></div>
+      <button id="copyBtn">コピーする</button>
+    </div>
+  </div>
+
+  <script>
+    let extractedData = null;
+
+    document.getElementById('fileInput').addEventListener('change', function(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+
+        const sheetName = 'ジャーナル'; 
+        const sheet = workbook.Sheets[sheetName];
+
+        if (!sheet) {
+          extractedData = null;
+          return;
+        }
+
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+        if (jsonData.length === 0) {
+          extractedData = null;
+          return;
+        }
+
+        function excelSerialDateToJSDate(serial) {
+          return new Date((serial - 25569) * 86400000).toISOString().split('T')[0];
+        }
+
+        const todayString = new Date().toISOString().split('T')[0];
+
+        extractedData = jsonData.find(row => {
+          const dateCell = row[27];
+          let formattedDate = '';
+
+          if (typeof dateCell === 'number') {
+            formattedDate = excelSerialDateToJSDate(dateCell);
+          } else if (typeof dateCell === 'string') {
+            const parsedDate = new Date(dateCell);
+            if (!isNaN(parsedDate)) {
+              formattedDate = parsedDate.toISOString().split('T')[0];
+            }
+          }
+
+          return formattedDate === todayString;
+        });
+      };
+
+      reader.readAsArrayBuffer(file);
+    });
+
+    document.getElementById('submitBtn').addEventListener('click', function() {
+      if (!extractedData) {
+        alert("No matching data found for today's date.");
+        return;
+      }
+
+      const comment = document.getElementById('comment').value.trim();
+      const notificationTime = document.getElementById('notificationTime').value;
+      const accidentDate = document.getElementById('accidentDate').value;
+      const today = new Date();
+      const daysSinceAccident = Math.floor((today - new Date(accidentDate)) / (1000 * 60 * 60 * 24));
+      const currentMonth = today.getMonth() + 1;
+
+      let outputText = `${comment}\n\n\n`;
+      outputText += `新件は ${extractedData[45] || 0} 件\nリピーターは ${extractedData[46] || 0} 件\n合計 ${extractedData[47] || 0} 件\n\n`;
+      outputText += `予算\n銀 ¥${extractedData[31] || 0}\n実績\n銀 ¥${extractedData[34] || 0}\n客単価 ¥${Math.ceil(extractedData[54] || 0)}\n`;
+      outputText += `無事故実績 ${daysSinceAccident} 日\n\nクルー教育\n\n出前館最大告知時間: ${notificationTime} 分\nWOSと電話最大告知時間: ${notificationTime}分\n遅配 0件\n受注ロス 0件\n\n`;
+      outputText += `${currentMonth}月累計予算\n銀 ¥${extractedData[33] || 0}\n\n`;
+      outputText += `${currentMonth}月累計実績\n銀 ¥${extractedData[37] || 0}\n\n`;
+      outputText += `予算達成率 ${(extractedData[38] * 100).toFixed(1)}%\n\n\n`;
+
+      document.getElementById('output').textContent = outputText;
+      document.getElementById('output-container').style.display = 'block';
+    });
+
+    document.getElementById('copyBtn').addEventListener('click', function() {
+      const textToCopy = document.getElementById('output').textContent;
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        alert("レポートがクリップボードにコピーされました！");
+      }).catch(err => {
+        alert("コピーに失敗しました。");
+        console.error(err);
+      });
+    });
+  </script>
+
+</body>
+</html>
