@@ -182,10 +182,13 @@
 
       let outputText = `${comment}\n\n\n`;
       outputText += `新件は ${extractedData[45] || 0} 件\nリピーターは ${extractedData[46] || 0} 件\n合計 ${extractedData[47] || 0} 件\n\n`;
-      outputText += `予算\n銀 ¥${extractedData[31] || 0}\n実績\n銀 ¥${extractedData[34] || 0}\n客単価 ¥${Math.ceil(extractedData[54] || 0)}\n`;
-      outputText += `無事故実績 ${daysSinceAccident} 日\n\nクルー教育\n\n出前館最大告知時間: ${notificationTime} 分\nWOSと電話最大告知時間: ${notificationTime}分\n遅配 0件\n受注ロス 0件\n\n`;
-      outputText += `${currentMonth}月累計予算\n銀 ¥${extractedData[33] || 0}\n\n`;
-      outputText += `${currentMonth}月累計実績\n銀 ¥${extractedData[37] || 0}\n\n`;
+      outputText += `予算\n銀 ¥${(extractedData[31] || 0).toLocaleString()}\n\n`;
+      outputText += `実績\n銀 ¥${(extractedData[34] || 0).toLocaleString()}\n\n`;
+      outputText += `客単価 ¥${Math.ceil(extractedData[54] || 0).toLocaleString()}\n\n`;
+      outputText += `無事故実績 ${daysSinceAccident} 日\n\nクルー教育\n\n\n`;
+      outputText += `出前館最大告知時間: ${notificationTime} 分\nWOSと電話最大告知時間: ${notificationTime}分\n遅配 0件\n受注ロス 0件\n\n\n`;
+      outputText += `${currentMonth}月累計予算\n銀 ¥${(extractedData[33] || 0).toLocaleString()}\n\n\n`;
+      outputText += `${currentMonth}月累計実績\n銀 ¥${(extractedData[37] || 0).toLocaleString()}\n\n\n`;
       outputText += `予算達成率 ${(extractedData[38] * 100).toFixed(1)}%\n\n\n`;
 
       document.getElementById('output').textContent = outputText;
