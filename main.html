@@ -109,8 +109,11 @@
   </div>
 
   <script>
-    let extractedData = null;
     let jsonData = [];
+
+    function excelSerialDateToJSDate(serial) {
+      return new Date((serial - 25569) * 86400000).toISOString().split('T')[0];
+    }
 
     document.getElementById('fileInput').addEventListener('change', function(event) {
       const file = event.target.files[0];
@@ -123,48 +126,17 @@
 
         const sheetName = 'ジャーナル';
         const sheet = workbook.Sheets[sheetName];
-
         if (!sheet) return;
 
         jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-
-        function excelSerialDateToJSDate(serial) {
-          return new Date((serial - 25569) * 86400000).toISOString().split('T')[0];
-        }
-
-        const todayString = new Date().toISOString().split('T')[0];
-
-        const todayIndex = jsonData.findIndex(row => {
-          const cell = row[27];
-          if (!cell) return false;
-          let formatted = '';
-
-          if (typeof cell === 'number') {
-            formatted = excelSerialDateToJSDate(cell);
-          } else if (typeof cell === 'string') {
-            const parsed = new Date(cell);
-            if (!isNaN(parsed)) {
-              formatted = parsed.toISOString().split('T')[0];
-            }
-          }
-
-          return formatted === todayString;
-        });
-
-        if (todayIndex !== -1) {
-          extractedData = jsonData[todayIndex];
-          extractedData._rowIndex = todayIndex;
-        } else {
-          extractedData = null;
-        }
       };
 
       reader.readAsArrayBuffer(file);
     });
 
     document.getElementById('submitBtn').addEventListener('click', function() {
-      if (!extractedData) {
-        alert("No matching data found for today's date.");
+      if (!jsonData.length) {
+        alert("ファイルが読み込まれていません。");
         return;
       }
 
@@ -172,28 +144,57 @@
       const notificationTime = document.getElementById('notificationTime').value;
       const accidentDate = document.getElementById('accidentDate').value;
       const today = new Date();
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
       const daysSinceAccident = Math.floor((today - new Date(accidentDate)) / (1000 * 60 * 60 * 24));
       const currentMonth = today.getMonth() + 1;
 
-      const nextRow = jsonData[extractedData._rowIndex + 1];
-      let tomorrowLine = '';
-      if (nextRow) {
-        const count87 = nextRow[70] || 0;
-        const count88 = nextRow[71] || 0;
-        tomorrowLine = `明日の予約は${count87}件で${count88}万です。\n\n`;
+      let extractedRow = null;
+      let tomorrowReservations = '';
+
+      for (let i = 0; i < jsonData.length; i++) {
+        const row = jsonData[i];
+        const dateCell = row[27];
+        let formattedDate = '';
+
+        if (typeof dateCell === 'number') {
+          formattedDate = excelSerialDateToJSDate(dateCell);
+        } else if (typeof dateCell === 'string') {
+          const parsed = new Date(dateCell);
+          if (!isNaN(parsed)) {
+            formattedDate = parsed.toISOString().split('T')[0];
+          }
+        }
+
+        if (formattedDate === tomorrowStr) {
+          const valCR = row[95] || 0;
+          const valCS = row[96] || 0;
+          tomorrowReservations = `明日の予約は${valCR}件で${valCS}万です。\n\n`;
+        }
+
+        if (formattedDate === today.toISOString().split('T')[0]) {
+          extractedRow = row;
+        }
+      }
+
+      if (!extractedRow) {
+        alert("本日のデータが見つかりません。");
+        return;
       }
 
       let outputText = `${comment}\n\n\n`;
-      outputText += `新件は ${extractedData[45] || 0} 件\nリピーターは ${extractedData[46] || 0} 件\n合計 ${extractedData[47] || 0} 件\n\n`;
-      outputText += `予算\n銀 ¥${(extractedData[31] || 0).toLocaleString()}\n\n`;
-      outputText += `実績\n銀 ¥${(extractedData[34] || 0).toLocaleString()}\n\n`;
-      outputText += tomorrowLine;
-      outputText += `客単価 ¥${Math.ceil(extractedData[54] || 0).toLocaleString()}\n\n`;
+      outputText += `新件は ${extractedRow[45] || 0} 件\nリピーターは ${extractedRow[46] || 0} 件\n合計 ${extractedRow[47] || 0} 件\n\n`;
+      outputText += `予算\n銀 ¥${(extractedRow[31] || 0).toLocaleString()}\n\n`;
+      outputText += `実績\n銀 ¥${(extractedRow[34] || 0).toLocaleString()}\n\n`;
+      outputText += tomorrowReservations;
+      outputText += `客単価 ¥${Math.ceil(extractedRow[54] || 0).toLocaleString()}\n\n`;
       outputText += `無事故実績 ${daysSinceAccident} 日\n\nクルー教育\n\n\n`;
       outputText += `出前館最大告知時間: ${notificationTime} 分\nWOSと電話最大告知時間: ${notificationTime}分\n遅配 0件\n受注ロス 0件\n\n\n`;
-      outputText += `${currentMonth}月累計予算\n銀 ¥${(extractedData[33] || 0).toLocaleString()}\n\n\n`;
-      outputText += `${currentMonth}月累計実績\n銀 ¥${(extractedData[37] || 0).toLocaleString()}\n\n\n`;
-      outputText += `予算達成率 ${(extractedData[38] * 100).toFixed(1)}%\n\n\n`;
+      outputText += `${currentMonth}月累計予算\n銀 ¥${(extractedRow[33] || 0).toLocaleString()}\n\n\n`;
+      outputText += `${currentMonth}月累計実績\n銀 ¥${(extractedRow[37] || 0).toLocaleString()}\n\n\n`;
+      outputText += `予算達成率 ${(extractedRow[38] * 100).toFixed(1)}%\n\n\n`;
 
       document.getElementById('output').textContent = outputText;
       document.getElementById('output-container').style.display = 'block';
