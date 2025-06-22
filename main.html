@@ -152,7 +152,8 @@
       const currentMonth = today.getMonth() + 1;
 
       let extractedRow = null;
-      let tomorrowReservations = '';
+      let tomorrowRow = null;
+      let foundToday = false;
 
       for (let i = 0; i < jsonData.length; i++) {
         const row = jsonData[i];
@@ -168,14 +169,13 @@
           }
         }
 
-        if (formattedDate === tomorrowStr) {
-          const valCR = row[88] || 0;
-          const valCS = row[89] || 0;
-          tomorrowReservations = `明日の予約は${valCR}件で${valCS}万です。\n\n`;
-        }
-
         if (formattedDate === today.toISOString().split('T')[0]) {
           extractedRow = row;
+          foundToday = true;
+          if (i + 1 < jsonData.length) {
+            tomorrowRow = jsonData[i + 1];
+          }
+          break;
         }
       }
 
@@ -184,11 +184,15 @@
         return;
       }
 
+      // Get values from index 95 and 96 (columns 96 and 97)
+      const val95 = tomorrowRow ? (tomorrowRow[95] || 0) : 0;
+      const val96 = tomorrowRow ? (tomorrowRow[96] || 0) : 0;
+
       let outputText = `${comment}\n\n\n`;
       outputText += `新件は ${extractedRow[45] || 0} 件\nリピーターは ${extractedRow[46] || 0} 件\n合計 ${extractedRow[47] || 0} 件\n\n`;
       outputText += `予算\n銀 ¥${(extractedRow[31] || 0).toLocaleString()}\n\n`;
       outputText += `実績\n銀 ¥${(extractedRow[34] || 0).toLocaleString()}\n\n`;
-      outputText += tomorrowReservations;
+      outputText += `明日の予約は${val95}件で${val96}万です。\n\n`;
       outputText += `客単価 ¥${Math.ceil(extractedRow[54] || 0).toLocaleString()}\n\n`;
       outputText += `無事故実績 ${daysSinceAccident} 日\n\nクルー教育\n\n\n`;
       outputText += `出前館最大告知時間: ${notificationTime} 分\nWOSと電話最大告知時間: ${notificationTime}分\n遅配 0件\n受注ロス 0件\n\n\n`;
