@@ -79,34 +79,28 @@
   <div class="container">
     <h1>Report Maker</h1>
 
-    <!-- File Input -->
     <div class="form-group">
       <label for="fileInput">ファイルを選択:</label>
       <input type="file" id="fileInput" accept=".xlsx, .xls">
     </div>
 
-    <!-- Comment Input -->
     <div class="form-group">
       <label for="comment">コメント:</label>
       <textarea id="comment" rows="3"></textarea>
     </div>
 
-    <!-- Notification Time Input -->
     <div class="form-group">
       <label for="notificationTime">告知時間 (分):</label>
       <input type="number" id="notificationTime" value="30">
     </div>
 
-    <!-- Accident Date Input -->
     <div class="form-group">
       <label for="accidentDate">事故日:</label>
       <input type="date" id="accidentDate" value="2024-07-02">
     </div>
 
-    <!-- Submit Button -->
     <button id="submitBtn">作成</button>
 
-    <!-- Output Section -->
     <div id="output-container">
       <h3>Report Output:</h3>
       <div id="output"></div>
@@ -130,17 +124,9 @@
         const sheetName = 'ジャーナル';
         const sheet = workbook.Sheets[sheetName];
 
-        if (!sheet) {
-          extractedData = null;
-          return;
-        }
+        if (!sheet) return;
 
         jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-
-        if (jsonData.length === 0) {
-          extractedData = null;
-          return;
-        }
 
         function excelSerialDateToJSDate(serial) {
           return new Date((serial - 25569) * 86400000).toISOString().split('T')[0];
@@ -148,21 +134,29 @@
 
         const todayString = new Date().toISOString().split('T')[0];
 
-        extractedData = jsonData.find(row => {
-          const dateCell = row[27];
-          let formattedDate = '';
+        const todayIndex = jsonData.findIndex(row => {
+          const cell = row[27];
+          if (!cell) return false;
+          let formatted = '';
 
-          if (typeof dateCell === 'number') {
-            formattedDate = excelSerialDateToJSDate(dateCell);
-          } else if (typeof dateCell === 'string') {
-            const parsedDate = new Date(dateCell);
-            if (!isNaN(parsedDate)) {
-              formattedDate = parsedDate.toISOString().split('T')[0];
+          if (typeof cell === 'number') {
+            formatted = excelSerialDateToJSDate(cell);
+          } else if (typeof cell === 'string') {
+            const parsed = new Date(cell);
+            if (!isNaN(parsed)) {
+              formatted = parsed.toISOString().split('T')[0];
             }
           }
 
-          return formattedDate === todayString;
+          return formatted === todayString;
         });
+
+        if (todayIndex !== -1) {
+          extractedData = jsonData[todayIndex];
+          extractedData._rowIndex = todayIndex;
+        } else {
+          extractedData = null;
+        }
       };
 
       reader.readAsArrayBuffer(file);
@@ -181,23 +175,19 @@
       const daysSinceAccident = Math.floor((today - new Date(accidentDate)) / (1000 * 60 * 60 * 24));
       const currentMonth = today.getMonth() + 1;
 
-      // Find index of today's row
-      const matchedIndex = extractedData ? jsonData.findIndex(row => row === extractedData) : -1;
-
-      // Tomorrow's reservation info
-      let tomorrowReservations = '';
-      if (matchedIndex !== -1 && jsonData[matchedIndex + 1]) {
-        const nextRow = jsonData[matchedIndex + 1];
-        const val87 = nextRow[34] || 0;
-        const val88 = nextRow[71] || 0;
-        tomorrowReservations = `明日の予約は${val87}件で${val88}万です。\n\n`;
+      const nextRow = jsonData[extractedData._rowIndex + 1];
+      let tomorrowLine = '';
+      if (nextRow) {
+        const count87 = nextRow[86] || 0;
+        const count88 = nextRow[87] || 0;
+        tomorrowLine = `明日の予約は${count87}件で${count88}万です。\n\n`;
       }
 
       let outputText = `${comment}\n\n\n`;
       outputText += `新件は ${extractedData[45] || 0} 件\nリピーターは ${extractedData[46] || 0} 件\n合計 ${extractedData[47] || 0} 件\n\n`;
       outputText += `予算\n銀 ¥${(extractedData[31] || 0).toLocaleString()}\n\n`;
       outputText += `実績\n銀 ¥${(extractedData[34] || 0).toLocaleString()}\n\n`;
-      outputText += tomorrowReservations;
+      outputText += tomorrowLine;
       outputText += `客単価 ¥${Math.ceil(extractedData[54] || 0).toLocaleString()}\n\n`;
       outputText += `無事故実績 ${daysSinceAccident} 日\n\nクルー教育\n\n\n`;
       outputText += `出前館最大告知時間: ${notificationTime} 分\nWOSと電話最大告知時間: ${notificationTime}分\n遅配 0件\n受注ロス 0件\n\n\n`;
