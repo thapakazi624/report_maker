@@ -116,6 +116,7 @@
 
   <script>
     let extractedData = null;
+    let jsonData = [];
 
     document.getElementById('fileInput').addEventListener('change', function(event) {
       const file = event.target.files[0];
@@ -126,7 +127,7 @@
         const data = new Uint8Array(e.target.result);
         const workbook = XLSX.read(data, { type: 'array' });
 
-        const sheetName = 'ジャーナル'; 
+        const sheetName = 'ジャーナル';
         const sheet = workbook.Sheets[sheetName];
 
         if (!sheet) {
@@ -134,7 +135,7 @@
           return;
         }
 
-        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
         if (jsonData.length === 0) {
           extractedData = null;
@@ -180,10 +181,23 @@
       const daysSinceAccident = Math.floor((today - new Date(accidentDate)) / (1000 * 60 * 60 * 24));
       const currentMonth = today.getMonth() + 1;
 
+      // Find index of today's row
+      const matchedIndex = extractedData ? jsonData.findIndex(row => row === extractedData) : -1;
+
+      // Tomorrow's reservation info
+      let tomorrowReservations = '';
+      if (matchedIndex !== -1 && jsonData[matchedIndex + 1]) {
+        const nextRow = jsonData[matchedIndex + 1];
+        const val87 = nextRow[86] || 0;
+        const val88 = nextRow[87] || 0;
+        tomorrowReservations = `明日の予約は${val87}件で${val88}万です。\n\n`;
+      }
+
       let outputText = `${comment}\n\n\n`;
       outputText += `新件は ${extractedData[45] || 0} 件\nリピーターは ${extractedData[46] || 0} 件\n合計 ${extractedData[47] || 0} 件\n\n`;
       outputText += `予算\n銀 ¥${(extractedData[31] || 0).toLocaleString()}\n\n`;
       outputText += `実績\n銀 ¥${(extractedData[34] || 0).toLocaleString()}\n\n`;
+      outputText += tomorrowReservations;
       outputText += `客単価 ¥${Math.ceil(extractedData[54] || 0).toLocaleString()}\n\n`;
       outputText += `無事故実績 ${daysSinceAccident} 日\n\nクルー教育\n\n\n`;
       outputText += `出前館最大告知時間: ${notificationTime} 分\nWOSと電話最大告知時間: ${notificationTime}分\n遅配 0件\n受注ロス 0件\n\n\n`;
