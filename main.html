@@ -94,11 +94,6 @@
       <input type="number" id="notificationTime" value="30">
     </div>
 
-    <div class="form-group">
-      <label for="accidentDate">事故日:</label>
-      <input type="date" id="accidentDate" value="2024-07-02">
-    </div>
-
     <button id="submitBtn">作成</button>
 
     <div id="output-container">
@@ -110,6 +105,7 @@
 
   <script>
     let jsonData = [];
+    let workbookRef = null;
 
     function excelSerialDateToJSDate(serial) {
       return new Date((serial - 25569) * 86400000).toISOString().split('T')[0];
@@ -123,6 +119,7 @@
       reader.onload = function(e) {
         const data = new Uint8Array(e.target.result);
         const workbook = XLSX.read(data, { type: 'array' });
+        workbookRef = workbook; // store reference
 
         const sheetName = 'ジャーナル';
         const sheet = workbook.Sheets[sheetName];
@@ -135,25 +132,22 @@
     });
 
     document.getElementById('submitBtn').addEventListener('click', function() {
-      if (!jsonData.length) {
+      if (!jsonData.length || !workbookRef) {
         alert("ファイルが読み込まれていません。");
         return;
       }
 
       const comment = document.getElementById('comment').value.trim();
       const notificationTime = document.getElementById('notificationTime').value;
-      const accidentDate = document.getElementById('accidentDate').value;
       const today = new Date();
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
-      const daysSinceAccident = Math.floor((today - new Date(accidentDate)) / (1000 * 60 * 60 * 24));
       const currentMonth = today.getMonth() + 1;
 
       let extractedRow = null;
       let tomorrowRow = null;
-      let foundToday = false;
 
       for (let i = 0; i < jsonData.length; i++) {
         const row = jsonData[i];
@@ -171,7 +165,6 @@
 
         if (formattedDate === today.toISOString().split('T')[0]) {
           extractedRow = row;
-          foundToday = true;
           if (i + 1 < jsonData.length) {
             tomorrowRow = jsonData[i + 1];
           }
@@ -184,7 +177,16 @@
         return;
       }
 
-      // Get values from index 95 and 96 (columns 96 and 97)
+      // Get accident-free days from sixth sheet's column Y, row 78
+      let accidentFreeDays = 0;
+      const sixthSheetName = workbookRef.SheetNames[5];
+      const sixthSheet = workbookRef.Sheets[sixthSheetName];
+      if (sixthSheet) {
+        const cellAddress = 'Y78';
+        const cell = sixthSheet[cellAddress];
+        accidentFreeDays = cell ? cell.v : 0;
+      }
+
       const val95 = tomorrowRow ? (tomorrowRow[95] || 0) : 0;
       const val96 = tomorrowRow ? (tomorrowRow[96] || 0) : 0;
 
@@ -194,7 +196,8 @@
       outputText += `実績\n銀 ¥${(extractedRow[34] || 0).toLocaleString()}\n\n`;
       outputText += `明日の予約は${val95}件で${val96}万です。\n\n`;
       outputText += `客単価 ¥${Math.ceil(extractedRow[54] || 0).toLocaleString()}\n\n`;
-      outputText += `無事故実績 ${daysSinceAccident} 日\n\nクルー教育\n\n\n`;
+      outputText += `クルー教育\n\n\n`;
+      outputText += `無事故実績 ${accidentFreeDays} 日\n\n`;
       outputText += `出前館最大告知時間: ${notificationTime} 分\nWOSと電話最大告知時間: ${notificationTime}分\n遅配 0件\n受注ロス 0件\n\n\n`;
       outputText += `${currentMonth}月累計予算\n銀 ¥${(extractedRow[33] || 0).toLocaleString()}\n\n\n`;
       outputText += `${currentMonth}月累計実績\n銀 ¥${(extractedRow[37] || 0).toLocaleString()}\n\n\n`;
